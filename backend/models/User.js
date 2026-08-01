@@ -22,11 +22,18 @@ const userSchema = new mongoose.Schema(
         type:String,
         enum:["student","recruiter","admin"],
         default:"student"
+    },
+
+    // Resume File Path
+    resume:{
+        type:String,
+        default:""
     }
 
 },
-{timestamps:true}
-
+{
+    timestamps:true
+}
 );
 
-module.exports=mongoose.model("User",userSchema);
+module.exports = mongoose.model("User", userSchema);
