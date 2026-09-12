@@ -4,7 +4,6 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import API from "./api";
 
-
 // =========================
 // STUDENT DASHBOARD
 // =========================
@@ -15,7 +14,14 @@ function StudentDashboard() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const [resume, setResume] = useState(null);
+  const [uploadingResume, setUploadingResume] = useState(false);
+
   const user = JSON.parse(localStorage.getItem("user"));
+
+  // =========================
+  // FETCH JOBS
+  // =========================
 
   const fetchJobs = async () => {
     try {
@@ -26,6 +32,10 @@ function StudentDashboard() {
     }
   };
 
+  // =========================
+  // FETCH APPLICATIONS
+  // =========================
+
   const fetchApplications = async () => {
     try {
       const response = await API.get("/applications/my-applications");
@@ -34,6 +44,10 @@ function StudentDashboard() {
       setMessage("Unable to load applications");
     }
   };
+
+  // =========================
+  // LOAD DASHBOARD
+  // =========================
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -45,6 +59,54 @@ function StudentDashboard() {
     loadDashboard();
   }, []);
 
+  // =========================
+  // RESUME UPLOAD
+  // =========================
+
+  const handleResumeUpload = async () => {
+    if (!resume) {
+      setMessage("Please select a resume first");
+      return;
+    }
+
+    try {
+      setUploadingResume(true);
+      setMessage("");
+
+      const formData = new FormData();
+      formData.append("resume", resume);
+
+      const response = await API.post(
+        "/auth/upload-resume",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      setMessage(
+        response.data.message || "Resume uploaded successfully"
+      );
+
+      setResume(null);
+    } catch (error) {
+      console.log(error);
+
+      setMessage(
+        error.response?.data?.message ||
+          "Resume upload failed"
+      );
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
+  // =========================
+  // APPLY JOB
+  // =========================
+
   const handleApply = async (jobId) => {
     try {
       const response = await API.post(
@@ -54,13 +116,17 @@ function StudentDashboard() {
       setMessage(response.data.message);
 
       await fetchApplications();
-
     } catch (error) {
       setMessage(
-        error.response?.data?.message || "Application failed"
+        error.response?.data?.message ||
+          "Application failed"
       );
     }
   };
+
+  // =========================
+  // LOGOUT
+  // =========================
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -75,7 +141,6 @@ function StudentDashboard() {
 
   return (
     <div style={{ padding: "30px" }}>
-
       <h1>CareerConnect AI</h1>
 
       <p>
@@ -98,7 +163,40 @@ function StudentDashboard() {
         </p>
       )}
 
-      {/* AVAILABLE JOBS */}
+      {/* =========================
+          RESUME UPLOAD
+      ========================= */}
+
+      <h2>Upload Resume</h2>
+
+      <input
+        type="file"
+        accept=".pdf,.doc,.docx"
+        onChange={(e) =>
+          setResume(e.target.files?.[0] || null)
+        }
+      />
+
+      {resume && (
+        <p>
+          Selected File: <strong>{resume.name}</strong>
+        </p>
+      )}
+
+      <button
+        onClick={handleResumeUpload}
+        disabled={uploadingResume}
+      >
+        {uploadingResume
+          ? "Uploading..."
+          : "Upload Resume"}
+      </button>
+
+      <hr />
+
+      {/* =========================
+          AVAILABLE JOBS
+      ========================= */}
 
       <h2>Available Jobs</h2>
 
@@ -115,7 +213,6 @@ function StudentDashboard() {
               borderRadius: "8px",
             }}
           >
-
             <h3>{job.title}</h3>
 
             <p>
@@ -130,23 +227,22 @@ function StudentDashboard() {
               <strong>Salary:</strong> {job.salary}
             </p>
 
-            <p>
-              {job.description}
-            </p>
+            <p>{job.description}</p>
 
             <button
               onClick={() => handleApply(job._id)}
             >
               Apply Now
             </button>
-
           </div>
         ))
       )}
 
       <hr />
 
-      {/* MY APPLICATIONS */}
+      {/* =========================
+          MY APPLICATIONS
+      ========================= */}
 
       <h2>My Applications</h2>
 
@@ -165,7 +261,6 @@ function StudentDashboard() {
               borderRadius: "8px",
             }}
           >
-
             <h3>
               {application.job?.title}
             </h3>
@@ -175,21 +270,22 @@ function StudentDashboard() {
             </p>
 
             <p>
-              Status: <strong>
+              Status:{" "}
+              <strong>
                 {application.status}
               </strong>
             </p>
-
           </div>
         ))
       )}
-
     </div>
   );
 }
 
-
 // =========================
+// RECRUITER DASHBOARD
+// =========================
+
 function RecruiterDashboard() {
   const [title, setTitle] = useState("");
   const [company, setCompany] = useState("");
@@ -208,23 +304,32 @@ function RecruiterDashboard() {
   // =========================
 
   const fetchJobs = async () => {
-    try {
-      const response = await API.get("/jobs");
+  try {
+    const response = await API.get("/jobs");
 
-      const allJobs = response.data.jobs || [];
+    const allJobs = response.data.jobs || [];
 
-      const myJobs = allJobs.filter(
-        (job) =>
-          job.recruiter?._id === user?._id ||
-          job.recruiter === user?._id
-      );
+    const currentUserId = user?._id || user?.id;
 
-      setJobs(myJobs);
-    } catch (error) {
-      setMessage("Unable to load jobs");
-    }
-  };
+    const myJobs = allJobs.filter((job) => {
+      const recruiterId =
+        job.recruiter?._id ||
+        job.recruiter?.id ||
+        job.recruiter;
 
+      return String(recruiterId) === String(currentUserId);
+    });
+
+    setJobs(myJobs);
+  } catch (error) {
+    console.log(error);
+
+    setMessage(
+      error.response?.data?.message ||
+        "Unable to load jobs"
+    );
+  }
+};
   // =========================
   // FETCH APPLICANTS
   // =========================
@@ -240,14 +345,15 @@ function RecruiterDashboard() {
         [jobId]: response.data.applications || [],
       }));
     } catch (error) {
+      console.log(error);
+
       setMessage(
         error.response?.data?.message ||
-        "Unable to load applicants"
+          "Unable to load applicants"
       );
     }
   };
 
-  // =========================
   // CREATE JOB
   // =========================
 
@@ -270,7 +376,7 @@ function RecruiterDashboard() {
 
       setMessage(
         response.data.message ||
-        "Job posted successfully"
+          "Job posted successfully"
       );
 
       setTitle("");
@@ -283,7 +389,7 @@ function RecruiterDashboard() {
     } catch (error) {
       setMessage(
         error.response?.data?.message ||
-        "Failed to create job"
+          "Failed to create job"
       );
     }
   };
@@ -307,15 +413,14 @@ function RecruiterDashboard() {
 
       setMessage(
         response.data.message ||
-        "Application status updated successfully"
+          "Application status updated successfully"
       );
 
-      // Refresh applicants after update
       await fetchApplicants(jobId);
     } catch (error) {
       setMessage(
         error.response?.data?.message ||
-        "Unable to update application"
+          "Unable to update application"
       );
     }
   };
@@ -341,7 +446,6 @@ function RecruiterDashboard() {
 
   return (
     <div style={{ padding: "30px" }}>
-
       <h1>CareerConnect AI</h1>
 
       <p>
@@ -365,7 +469,6 @@ function RecruiterDashboard() {
       <h2>Create New Job</h2>
 
       <form onSubmit={handleCreateJob}>
-
         <input
           type="text"
           placeholder="Job Title"
@@ -424,7 +527,6 @@ function RecruiterDashboard() {
         <button type="submit">
           Create Job
         </button>
-
       </form>
 
       {message && (
@@ -454,7 +556,6 @@ function RecruiterDashboard() {
               borderRadius: "8px",
             }}
           >
-
             <h3>{job.title}</h3>
 
             <p>
@@ -490,7 +591,6 @@ function RecruiterDashboard() {
 
             {applicants[job._id] && (
               <div style={{ marginTop: "20px" }}>
-
                 <h3>Applicants</h3>
 
                 {applicants[job._id].length === 0 ? (
@@ -507,21 +607,37 @@ function RecruiterDashboard() {
                           borderRadius: "6px",
                         }}
                       >
-
                         <p>
                           <strong>Name:</strong>{" "}
                           {application.student?.name}
                         </p>
 
-                        <p>
-                          <strong>Email:</strong>{" "}
-                          {application.student?.email}
-                        </p>
+                      <p>
+  <strong>Email:</strong>{" "}
+  {application.student?.email}
+</p>
 
-                        <p>
-                          <strong>Status:</strong>{" "}
-                          {application.status}
-                        </p>
+{application.student?.resume ? (
+  <p>
+    <strong>Resume:</strong>{" "}
+    <a
+      href={`${import.meta.env.VITE_API_URL.replace("/api", "")}/${application.student.resume.replace(/\\/g, "/")}`}
+      target="_blank"
+      rel="noreferrer"
+    >
+      View Resume
+    </a>
+  </p>
+) : (
+  <p>
+    <strong>Resume:</strong> No resume uploaded
+  </p>
+)}
+
+<p>
+  <strong>Status:</strong>{" "}
+  {application.status}
+</p>
 
                         <button
                           onClick={() =>
@@ -548,28 +664,24 @@ function RecruiterDashboard() {
                         >
                           Reject
                         </button>
-
                       </div>
                     )
                   )
                 )}
-
               </div>
             )}
-
           </div>
         ))
       )}
-
     </div>
   );
 }
+
 // =========================
 // APP / ROUTING
 // =========================
 
 function App() {
-
   const storedUser = localStorage.getItem("user");
 
   let user = null;
@@ -584,14 +696,10 @@ function App() {
 
   return (
     <BrowserRouter>
-
       <Routes>
-
         <Route
           path="/"
-          element={
-            <Navigate to="/login" />
-          }
+          element={<Navigate to="/login" />}
         />
 
         <Route
@@ -616,9 +724,7 @@ function App() {
             )
           }
         />
-
       </Routes>
-
     </BrowserRouter>
   );
 }

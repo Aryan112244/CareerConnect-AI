@@ -101,7 +101,7 @@ exports.viewApplicants = async (req, res) => {
         const applications = await Application.find({
             job: req.params.jobId
         })
-        .populate("student", "name email")
+       .populate("student", "name email resume")
         .populate("job", "title company");
 
         res.status(200).json({
